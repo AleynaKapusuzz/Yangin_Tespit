@@ -1,232 +1,319 @@
-# Yangin_Tespit
-
 # 🔥 Yangın & Duman Tespit Sistemi
+**Real-time Fire & Smoke Detection System | YOLOv8 + Flask**
 
-Gerçek zamanlı **YOLO** tabanlı yapay zeka sistemi ile IP kameraların video akışında yangın ve duman tespiti yapan Python uygulaması.
-
----
-
-## 📋 Proje Nedir?
-
-Sistem **RTSP kameralardan** gelen video akışını analiz ederek:
-- ✅ Yangın ve duman otomatik olarak tespit eder
-- ✅ Tespit anında **email** ile uyarı gönderir
-- ✅ **Snapshot** (görüntü) kaydeder
-- ✅ **Web arayüzü** üzerinden canlı izleme sağlar
-- ✅ **Windows servisi** olarak arka planda çalışabilir
+Bu sistem, YOLOv8 derin öğrenme modeli kullanarak RTSP kamera akışlarında **yangın ve duman tespiti** yapan, web arayüzüyle kontrol edilebilen bir sistemdir. Tehdit algılanırsa otomatik olarak e-mail bildirimi gönderir ve snapshot kaydeder.
 
 ---
 
-## 🏗️ Sistem Mimarisi
+## 🛠️ Teknolojiler
+
+| Teknoloji | Kullanım |
+|-----------|---------|
+| **Flask** | Web backend ve API sunucusu |
+| **OpenCV (cv2)** | Video işleme ve frame manipülasyonu |
+| **YOLO (ultralytics)** | Yangın/duman tespit modeli |
+| **PyTorch** | Model çıkarımı |
+| **Threading** | Çok kameralı paralel işleme |
+| **SMTP/Gmail** | Uyarı bildirimleri |
+| **HTML/CSS/JS** | Etkileşimli web arayüzü |
+
+---
+
+## 🌐 Web Arayüzü
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     PROJE YAPISI                            │
-└─────────────────────────────────────────────────────────────┘
-
-IP KAMERALAR (RTSP)
-      ↓
-┌──────────────────────────────────────────────────────────────┐
-│  detector.py (Tespit Motoru)                                 │
-│  ├─ Kamera stream akışını al                                │
-│  ├─ YOLO modelini çalıştır (her 3 frame'de 1)              │
-│  ├─ Yangın/Duman tespiti yap                                │
-│  ├─ Email gönder (tespit durumunda)                         │
-│  └─ Frame'i JPEG formatına çevir                            │
-└──────────────────────────────────────────────────────────────┘
-      ↓
-┌──────────────────────────────────────────────────────────────┐
-│  app.py (Flask Web Uygulaması)                              │
-│  ├─ API endpoints (video stream, status, kontrol)           │
-│  ├─ Canlı video stream'i tarayıcıya gönder                  │
-│  └─ Snapshot ve istatistik yönetimi                         │
-└──────────────────────────────────────────────────────────────┘
-      ↓
-┌──────────────────────────────────────────────────────────────┐
-│  index.html (Web Arayüzü)                                    │
-│  ├─ Canlı video izleme                                      │
-│  ├─ Kamera kontrolleri (başlat/durdur)                      │
-│  ├─ Confidence threshold ayarı                              │
-│  └─ Son tespit görüntüleri                                  │
-└──────────────────────────────────────────────────────────────┘
+http://yapayzeka:8505
 ```
+
+> **Lokal test**: `http://localhost:5050` (Flask debug modu)
 
 ---
 
-## 📁 Dosya & Klasör Yapısı
+## 📁 Proje Yapısı
 
 ```
 fire-smoke-detection/
 │
-├── train.py                  # YOLO modelini eğitmek için
+├── app.py                      ← Flask sunucusu ve API
+├── detector.py                 ← YOLO detektörü çekirdeği
+├── train.py                    ← Model eğitim scripti
+├── service_fire_smoke.py       ← NSSM Windows servisi
 │
-├── detector.py              # Tespit altyapısı (kamera işleme, AI modeli, email)
-│
-├── app.py                   # Flask API (web sunucusu)
-│
-├── index.html               # Web arayüzü (HTML/CSS/JS)
-│
-├── service_fire_smoke.py    # Windows NSSM servisi başlatıcısı
-│
-├── .env                     # Konfigürasyon (RTSP adresi, email, thresholds)
+├── templates/
+│   └── index.html              ← Web arayüzü (tab tabanlı, gerçek zamanlı polling)
 │
 ├── models/
-│   └── fire_smoke_yolov8.pt # Eğitilmiş YOLO modeli
+│   └── fire_smoke_yolov8.pt    ← Eğitilmiş YOLOv8 modeli
 │
-├── dataset/                 # Eğitim veri seti (eğitim sırasında oluşturulur)
-│   ├── images/
-│   │   ├── train/
-│   │   └── val/
-│   └── labels/
-│       ├── train/
-│       └── val/
+├── snapshots/
+│   ├── cam1/                   ← Kamera 1 tespit snapshot'ları
+│   └── cam2/                   ← Kamera 2 tespit snapshot'ları
 │
-└── snapshots/               # Tespit edilen görüntüler (cam1, cam2 klasörlerine bölünür)
-    ├── cam1/
-    └── cam2/
+├── .env                        ← Ayarlar (kamera URL'leri, Gmail, eşikler)
+├── requirements.txt            ← Python bağımlılıkları
+└── detection.log               ← Dedektör log dosyası
 ```
 
 ---
 
-## 🚀 Hızlı Başlangıç
+## 📋 Dosyalar ve Görevleri
 
-### 1. **Kurulum**
+### **1. `app.py`** — Flask Web Server
+- REST API endpoints sağlar (`/api/status`, `/api/start`, `/api/stop` vb.)
+- Video stream'i MJPEG formatında tarayıcıya yayınlar (`/video_feed/<cam_id>`)
+- Snapshot yönetimi ve indirme işlemleri
+- Uygulama açılırken otomatik olarak yapılandırılmış kameraları başlatır
+
+**Ana Endpoints:**
+- `GET /video_feed/<cam_id>` — Canlı video akışı
+- `POST /api/start/<cam_id>` — Dedektörü başlat
+- `POST /api/stop/<cam_id>` — Dedektörü durdur
+- `POST /api/conf/<cam_id>` — Güven eşiğini ayarla
+- `POST /api/snapshot/<cam_id>` — Manuel snapshot al
+- `GET /api/snapshots/<cam_id>` — Son snapshot'ları listele
+
+---
+
+### **2. `detector.py`** — Dedektör Motoru
+Projenin **merkezi dosyası**. Tüm tespit mantığını içerir:
+
+| Bileşen | Açıklama |
+|---------|----------|
+| **CameraState** | Her kamera için durum ve istatistik tutma |
+| **FireSmokeDetector** | YOLO modeliyle tespit yapan ana sınıf |
+| **get_model()** | Modeli bir kez yükle, tüm kameralar paylaşsın |
+| **send_gmail()** | Tespit edilirse e-mail gönder |
+| **alarm_worker()** | Mail gönderme işlemini arka planda çalıştır |
+| **save_snapshot()** | Tespit frame'ini kaydet |
+| **draw_detection()** | Tespit kutularını frame'e çiz |
+
+**Çalışma Akışı:**
+1. Kamera kaynağı açılır (RTSP, USB, dosya)
+2. Her frame işlenir (boyut, YOLO tahmini)
+3. FRAME_SKIP parametresiyle performans optimize edilir
+4. Yangın ve duman tespit edilirse:
+   - Snapshot kaydedilir
+   - E-mail gönderilir (cooldown ile)
+   - Durum güncellenir
+5. HUD bilgileri frame'e eklenir (FPS, tespit sayısı, durum)
+
+---
+
+### **3. `train.py`** — Model Eğitim Scripti
+YOLOv8 modelini eğitmek için:
 
 ```bash
-# Gerekli kütüphaneleri yükle
-pip install flask opencv-python ultralytics torch numpy python-dotenv
+# Dataset hazırlama (klasörler oluştur)
+python train.py setup
 
-# .env dosyası oluştur (RTSP adresi ve email ayarı)
-cp .env.example .env
+# Modeli eğit (50 epoch)
+python train.py train
+
+# Validsyon (test metrikleri)
+python train.py validate
 ```
 
-### 2. **Sistemi Çalıştır**
+**Beklediği yapı:**
+```
+dataset/
+├── images/
+│   ├── train/      ← Eğitim görselleri
+│   └── val/        ← Doğrulama görselleri
+└── labels/
+    ├── train/      ← YOLO format (.txt)
+    └── val/
+```
 
-**Seçenek A: Doğrudan Python ile**
+Eğitim sonrası model → `models/fire_smoke_yolov8.pt`
+
+---
+
+### **4. `service_fire_smoke.py`** — Windows NSSM Servisi
+Sistem başlangıcında otomatik çalıştırılmak için NSSM ile kaydedilir:
+
+```bash
+nssm install FireSmoke "C:\path\to\python.exe" "C:\path\to\service_fire_smoke.py"
+nssm start FireSmoke
+```
+
+- Flask'ı port 8505'te başlatır
+- Log'ları `service_fire_smoke.log`'a yazar
+- Hataları kaydeder
+
+---
+
+### **5. `index.html`** — Web Arayüzü
+Modern, responsive arayüz:
+- **Tab yapısı:** Kamera 1 | Kamera 2 | Snapshot Detayı
+- **Canlı video:** MJPEG stream
+- **Kontrol paneli:** Başlat/Durdur, kaynak seçme, güven eşiği slider
+- **İstatistikler:** FPS, tespit sayısı, son tespitler
+- **Snapshot galerisi:** Otomatik yenilenir
+- **Global durum:** Başlıkta genel uyarı göstergesi
+- **Gerçek zamanlı polling:** API'den her 500ms güncelleme
+
+---
+
+## ⚙️ Çevre Değişkenleri (`.env`)
+
+```env
+# Kamera kaynakları
+CAMERA1_SOURCE=rtsp://admin:admin@192.168.2.29:554/stream1
+CAMERA1_LABEL=Ofis
+CAMERA2_SOURCE=rtsp://admin:Gedik.64@10.10.10.4:554/stream1
+CAMERA2_LABEL=Depo
+
+# Model ayarları
+CONF_THRESHOLD=0.45          # Güven eşiği (0.0-1.0)
+IOU_THRESHOLD=0.45           # IoU eşiği
+FRAME_SKIP=3                 # Her 3. frame işle (performans)
+DISPLAY_WIDTH=1280           # Frame genişliği
+DISPLAY_HEIGHT=720           # Frame yüksekliği
+RECONNECT_DELAY=3            # Bağlantı kesintisi sonrası yeniden deneme (sn)
+
+# Alarm ayarları
+ALARM_COOLDOWN=30            # Aynı kamera için en az bekleme (sn)
+SAVE_SNAPSHOTS=true          # Tespit snapshot'larını kaydet
+
+# Gmail bildirimleri
+GMAIL_ENABLED=true
+GMAIL_GONDEREN=your-email@gmail.com
+GMAIL_SIFRE=your-app-password
+GMAIL_ALICI=alert@company.com
+```
+
+---
+
+## 🚀 Kurulum & Çalıştırma
+
+### 1. Bağımlılıkları Yükle
+```bash
+pip install -r requirements.txt
+```
+
+### 2. `.env` Dosyası Oluştur
+Kamera URL'leri ve Gmail bilgilerini gir.
+
+### 3. Modeli İndir/Eğit
+```bash
+# Eğitilmiş model varsa: models/fire_smoke_yolov8.pt
+# Yoksa eğitim datası topla ve çalıştır:
+python train.py setup
+# ... verileri ekle ...
+python train.py train
+```
+
+### 4. Flask'ı Başlat
 ```bash
 python app.py
-# Tarayıcı: http://localhost:5050
 ```
 
-**Seçenek B: Windows Servisi ile (NSSM kullanarak)**
+Tarayıcı: `http://localhost:5050`
+
+### 5. (Opsiyonel) NSSM Servisi Kur
 ```bash
 python service_fire_smoke.py
-# Tarayıcı: http://yapayzeka:8505
 ```
 
 ---
 
-## 🔧 Ana Dosyaların Görevleri
-
-### **train.py** - Model Eğitim
-- Veri seti yapısını hazırlar
-- YOLO modelini eğitir
-- Modeli `models/fire_smoke_yolov8.pt` konumuna kaydeder
-- Modelinin performansını test eder
-
-### **detector.py** - Tespit Motoru ⚙️
-- **Kamera bağlantısı**: RTSP akışından frame alır
-- **AI işlemi**: Her 3. frame'i YOLO modelinden geçirir
-- **Tespit**: Yangın/Duman kutularını bulur ve çizer
-- **Email**: Tespit anında email gönderir
-- **Snapshot**: Tespit edilen frame'i kaydeder
-- **Thread yönetimi**: Her kamera için ayrı thread
-
-### **app.py** - Web Uygulaması
-- `/video_feed/<cam_id>` → Canlı video stream
-- `/api/status/<cam_id>` → Kamera durumu (JSON)
-- `/api/start/<cam_id>` → Kamerayı başlat
-- `/api/stop/<cam_id>` → Kamerayı durdur
-- `/api/conf/<cam_id>` → Confidence eşiğini değiştir
-- `/api/snapshot/<cam_id>` → Manual snapshot al
-- `/api/snapshots/<cam_id>` → Son görüntüleri listele
-
-### **index.html** - Web Arayüzü
-- Kameralardan gelen canlı video
-- Kamera kontrolü (başlat/durdur)
-- Confidence slider (0.10 - 0.95)
-- Son tespit görüntülerinin galerisi
-- Canlı istatistik (FPS, tespit sayısı)
-
-### **service_fire_smoke.py** - Windows Servisi
-- Flask uygulamasını başlatır
-- Port 8505 dinler
-- Log kaydı tutar
-- NSSM tarafından çalıştırılmak üzere tasarlandı
-
----
-
-## 📊 Veri Akışı
+## 🔍 Sistem Mantığı
 
 ```
-Frame Geldi (RTSP)
-      ↓
-   [Her 3. frame'i işle]
-      ↓
-YOLO Tahmini Yap
-      ↓
-Yangın/Duman Bulundu mu?
-      ├─ EVET → Email Gönder + Snapshot Kaydet + 30sn Bekleme
-      └─ HAYIR → İleri Git
-      ↓
-JPEG Encode Et
-      ↓
-Web'e Stream Et
-      ↓
-İstatistik Güncelle
+┌─────────────────┐
+│ RTSP Kameralar  │
+└────────┬────────┘
+         │ (cv2.VideoCapture)
+         ↓
+┌─────────────────────────────┐
+│  FireSmokeDetector (Thread) │
+├─────────────────────────────┤
+│ 1. Frame oku                │
+│ 2. Her 3. frame'i YOLO'ya   │
+│ 3. Tespit: Yangın/Duman?    │
+│ 4. Coodown kontrol          │
+└────────┬────────────────────┘
+         │
+         ├→ Tespit VARSA:
+         │  ├─ Snapshot kaydet
+         │  ├─ Mail gönder (queue'ye koy)
+         │  └─ Frame'e uyarı çiz
+         │
+         └→ Frame JPEG'e çevir
+            ↓
+        ┌─────────────┐
+        │  CameraState│ (thread-safe)
+        │  - frame_jpg│
+        │  - fps      │
+        │  - detections
+        └─────┬───────┘
+              │
+              ↓
+        ┌─────────────────┐
+        │ Flask API       │
+        ├─────────────────┤
+        │ /video_feed     │ ← MJPEG Stream
+        │ /api/status     │ ← JSON stat
+        │ /api/start/stop │ ← Kontrol
+        └────────┬────────┘
+                 │
+                 ↓
+        ┌──────────────────┐
+        │ Web Tarayıcısı   │
+        │ (index.html)     │
+        │ - Video oynat    │
+        │ - Polling (500ms)│
+        │ - UI güncelle    │
+        └──────────────────┘
 ```
 
 ---
 
-## 🔐 Konfigürasyon Detayları
+## 💡 Önemli Detaylar
 
-| Parametre | Varsayılan | Açıklama |
-|-----------|-----------|----------|
-| `CONF_THRESHOLD` | 0.45 | YOLO güven eşiği (düşük = daha duyarlı) |
-| `IOU_THRESHOLD` | 0.45 | NMS kutu çakışma eşiği |
-| `ALARM_COOLDOWN` | 30 | Email gönderim aralığı (saniye) |
-| `FRAME_SKIP` | 3 | Her kaçıncı frame'i işle (hız için) |
-| `DISPLAY_WIDTH` | 1280 | İşlenmiş frame genişliği |
-| `DISPLAY_HEIGHT` | 720 | İşlenmiş frame yüksekliği |
-| `SAVE_SNAPSHOTS` | true | Tespit snapshot'ı kaydet |
+### Thread Safety
+- Her kamera kendi thread'de çalışır
+- `CameraState.lock` ile veri tutarlılığı sağlanır
+- Model tüm kameralar tarafından paylaşılır
 
----
+### Performans Optimizasyonları
+- **FRAME_SKIP:** Her 3. frame işlenerek CPU kullanımı düşürülür
+- **Buffer Size:** `cv2.CAP_PROP_BUFFERSIZE = 1` ile lag minimize edilir
+- **Shared Model:** Model memory'ye bir kez yüklenir
+- **Queue Kullanımı:** Mail gönderme, main thread'i bloke etmez
 
-## 📧 Email Konfigürasyonu
+### Duman Bastırması
+YOLO'dan gelen bazı false positive'ler filtrelenir:
+- Yangın kutusunun içinde duman tespit edilirse → duman görmezden gelinir
+- Mantık: Yangın varsa zaten duman var, ayrı uyarı gerekli değil
 
-**Gmail Uygulama Şifresi Nasıl Oluşturulur:**
-
-1. Google Hesabında 2FA aktif et
-2. https://myaccount.google.com/apppasswords adresine git
-3. "Mail" ve "Windows Bilgisayar" seç
-4. Oluşturulan 16 karakterlik şifreyi `.env` dosyasına yapıştır
-
----
-
-## 💻 Teknik Gereksinimler
-
-- **Python 3.8+**
-- **GPU (İsteğe bağlı)**: CUDA desteğine sahip NVIDIA kartı
-- **RAM**: Minimum 4GB (önerilen 8GB)
-- **Disk**: Model + veritabanı için 5GB
+### Error Handling
+- Kamera bağlantısı koptuğunda otomatik yeniden deneme
+- Model loading hataları için fallback mekanizması
+- API'deki tüm istisnalar yakalanır ve loglanır
 
 ---
 
-## 🐛 Troubleshooting
+## 📊 API Yanıtları
 
-**Kamera bağlantısı başarısız:**
-- RTSP adresini ve kullanıcı/şifreyi kontrol et
-- `rtsp://` protokolünü kullan, `http://` değil
-
-**Email gönderilmiyor:**
-- Gmail uygulama şifresini `.env`'de kontrol et
-- Internet bağlantısını doğrula
-
-**Yavaş performans:**
-- `FRAME_SKIP` değerini artır (örn: 5)
-- `DISPLAY_WIDTH` ve `DISPLAY_HEIGHT`'ı küçült
-
----
+### `GET /api/status/<cam_id>`
+```json
+{
+  "cam_id": "cam1",
+  "running": true,
+  "fps": 24.5,
+  "detection_active": false,
+  "total_detections": 3,
+  "conf_threshold": 0.45,
+  "last_detections": [
+    {"label": "fire", "conf": 0.87},
+    {"label": "smoke", "conf": 0.92}
+  ],
+  "snapshot_count": 15,
+  "source_label": "Ofis",
+  "error_msg": ""
+}
+```
 
 ---
 
