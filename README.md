@@ -230,6 +230,9 @@ Web'e Stream Et
 
 ---
 
-## 👤 Yardım & Destek
+## 👨‍💼 Maintainer
 
-Sorunlar için GitHub Issues açabilir veya pull request gönderebilirsiniz.
+- Aleyna Kapusuz
+- Hande Bandırmalı
+
+---
